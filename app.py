@@ -411,8 +411,36 @@ def main():
     calc = st.session_state.gex_calculator
     metrics = calc.get_total_gex_metrics()
 
+    # Aggregate strike data (used for PCR and later sections)
+    strike_df = aggregate_by_strike(st.session_state.option_data)
+
+    # Calculate global Put/Call Ratios
+    total_call_oi = strike_df['call_oi'].sum()
+    total_put_oi = strike_df['put_oi'].sum()
+    total_call_vol = strike_df['call_volume'].sum()
+    total_put_vol = strike_df['put_volume'].sum()
+
+    pcr_oi = total_put_oi / total_call_oi if total_call_oi > 0 else 0
+    pcr_vol = total_put_vol / total_call_vol if total_call_vol > 0 else 0
+
+    # Determine PCR sentiment
+    def pcr_sentiment(pcr):
+        if pcr == 0:
+            return "N/A", "gray"
+        elif pcr < 0.7:
+            return "🟢 Bullish", "normal"
+        elif pcr < 1.0:
+            return "🟡 Neutral-Bullish", "normal"
+        elif pcr < 1.3:
+            return "🟠 Neutral-Bearish", "normal"
+        else:
+            return "🔴 Bearish", "inverse"
+
+    pcr_oi_label, pcr_oi_delta_color = pcr_sentiment(pcr_oi)
+    pcr_vol_label, pcr_vol_delta_color = pcr_sentiment(pcr_vol)
+
     # Header metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
         st.metric(f"{st.session_state.symbol} Price", f"${st.session_state.underlying_price:,.2f}")
     with col2:
@@ -424,6 +452,22 @@ def main():
             st.metric("Zero Gamma", f"${metrics['zero_gamma']:,.2f}")
         else:
             st.metric("Zero Gamma", "N/A")
+    with col5:
+        st.metric(
+            "PCR (OI)",
+            f"{pcr_oi:.2f}" if pcr_oi > 0 else "N/A",
+            delta=pcr_oi_label,
+            delta_color="off",
+            help="Put/Call Ratio por Open Interest. <0.7 bullish, 0.7-1.0 neutro-bullish, 1.0-1.3 neutro-bearish, >1.3 bearish"
+        )
+    with col6:
+        st.metric(
+            "PCR (Volume)",
+            f"{pcr_vol:.2f}" if pcr_vol > 0 else "N/A",
+            delta=pcr_vol_label,
+            delta_color="off",
+            help="Put/Call Ratio por Volume. Indica sentimento de curto prazo. <0.7 bullish, >1.3 bearish"
+        )
 
     st.divider()
 
@@ -538,10 +582,45 @@ def main():
                 help="Strike where Net GEX crosses zero. Dealers long gamma above, short gamma below."
             )
 
-    # Volume and Open Interest Section
-    # Aggregate data by strike (used for IV Skew and Volume/OI)
-    strike_df = aggregate_by_strike(st.session_state.option_data)
+    # Put/Call Ratio Section
+    st.divider()
+    st.header("📉 Put/Call Ratio (PCR)")
 
+    pcr_col2, _ = st.columns([1, 2])
+
+    with pcr_col2:
+        st.subheader("📊 PCR Global")
+
+        st.metric(
+            "PCR (Open Interest)",
+            f"{pcr_oi:.2f}" if pcr_oi > 0 else "N/A",
+            help="Put OI Total / Call OI Total"
+        )
+        st.metric(
+            "PCR (Volume)",
+            f"{pcr_vol:.2f}" if pcr_vol > 0 else "N/A",
+            help="Put Volume Total / Call Volume Total"
+        )
+
+        st.divider()
+        st.markdown("**Interpretação:**")
+        st.markdown("""
+        - 🟢 **< 0.7** → Bullish (excesso de calls)
+        - 🟡 **0.7–1.0** → Neutro-Bullish
+        - 🟠 **1.0–1.3** → Neutro-Bearish
+        - 🔴 **> 1.3** → Bearish (excesso de puts)
+        """)
+
+        st.divider()
+        st.markdown("**OI Total:**")
+        st.markdown(f"- Calls: `{int(total_call_oi):,}`")
+        st.markdown(f"- Puts: `{int(total_put_oi):,}`")
+
+        st.markdown("**Volume Total:**")
+        st.markdown(f"- Calls: `{int(total_call_vol):,}`")
+        st.markdown(f"- Puts: `{int(total_put_vol):,}`")
+
+    # Volume and Open Interest Section
     # IV Skew Section
     if not strike_df.empty and (strike_df['call_iv'].notna().any() or strike_df['put_iv'].notna().any()):
         st.divider()
