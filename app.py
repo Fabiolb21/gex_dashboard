@@ -23,6 +23,7 @@ PRESET_SYMBOLS = {
     "QQQ": {"option_prefix": "QQQ", "default_price": 612, "increment": 1},
     "IWM": {"option_prefix": "IWM", "default_price": 240, "increment": 1},
     "DIA": {"option_prefix": "DIA", "default_price": 450, "increment": 1},
+    "AAPL": {"option_prefix": "DIA", "default_price": 284, "increment": 1},
 }
 
 DXFEED_URL = "wss://tasty-openapi-ws.dxfeed.com/realtime"
